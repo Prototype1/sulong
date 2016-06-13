@@ -395,7 +395,6 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                     globalVarNodes.add(functionCall);
                 }
             } else if (globalVar.getName().equals("@llvm.global_dtors")) {
-                System.out.println("sdasd");
                 ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
                 int size = type.getSize();
                 Object allocGlobalVariable = findOrAllocateGlobal(globalVar);
