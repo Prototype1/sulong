@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EObject;
@@ -247,7 +248,9 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         LLVMFunctionDescriptor mainFunction = searchFunction(parsedFunctions, "@main");
         LLVMNode[] staticInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
         RootCallTarget staticInitsTarget = Truffle.getRuntime().createCallTarget(factoryFacade.createStaticInitsRootNode(staticInits));
-        deallocations = globalDeallocations.toArray(new LLVMNode[globalDeallocations.size()]);
+        int staticDeallocSize = globalDestructorNodes.size() + globalDeallocations.size();
+        // we need to make sure that destructors are called before the deallocation of globals
+        deallocations = Stream.concat(globalDestructorNodes.stream(), globalDeallocations.stream()).toArray((node) -> new LLVMNode[staticDeallocSize]);
         RootCallTarget staticDestructorsTarget = Truffle.getRuntime().createCallTarget(factoryFacade.createStaticInitsRootNode(deallocations));
         if (mainFunction == null) {
             return new ParserResult(null, staticInitsTarget, staticDestructorsTarget, parsedFunctions);
@@ -257,6 +260,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
         RootNode globalRootNode = factoryFacade.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getReturnType());
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
+
         return new ParserResult(wrappedCallTarget, staticInitsTarget, staticDestructorsTarget, parsedFunctions);
     }
 
@@ -265,6 +269,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         List<EObject> objects = model.eContents();
         List<LLVMFunctionDescriptor> functions = new ArrayList<>();
         globalNodes = new ArrayList<>();
+        globalDestructorNodes = new ArrayList<>();
         List<GlobalVariable> staticVars = new ArrayList<>();
         functionToLabelMapping = new HashMap<>();
         setTargetInfo(objects);
@@ -367,6 +372,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             if (globalVarWrite != null) {
                 globalVarNodes.add(globalVarWrite);
             }
+
             if (globalVar.getName().equals("@llvm.global_ctors")) {
                 ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
                 int size = type.getSize();
@@ -388,8 +394,28 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                     LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, argNodes, LLVMBaseType.VOID);
                     globalVarNodes.add(functionCall);
                 }
-            } else if (globalVar.getName().equals("llvm.global_dtors")) {
-                throw new AssertionError("destructors not yet supported!");
+            } else if (globalVar.getName().equals("@llvm.global_dtors")) {
+                System.out.println("sdasd");
+                ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
+                int size = type.getSize();
+                Object allocGlobalVariable = findOrAllocateGlobal(globalVar);
+                ResolvedType structType = type.getContainedType(0);
+                int structSize = LLVMTypeHelper.getByteSize(structType);
+                for (int i = 0; i < size; i++) {
+                    LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(allocGlobalVariable, LLVMBaseType.ADDRESS);
+                    LLVMExpressionNode iNode = factoryFacade.createLiteral(i, LLVMBaseType.I32);
+                    LLVMExpressionNode structPointer = factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
+                    LLVMExpressionNode loadedStruct = factoryFacade.createLoad(structType, structPointer);
+                    ResolvedType functionType = structType.getContainedType(1);
+                    int indexedTypeLength = LLVMTypeHelper.getAlignmentByte(functionType);
+                    LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
+                    LLVMExpressionNode functionLoadTarget = factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
+                    LLVMExpressionNode loadedFunction = factoryFacade.createLoad(functionType, functionLoadTarget);
+                    LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot())};
+                    assert argNodes.length == factoryFacade.getArgStartIndex().get();
+                    LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, argNodes, LLVMBaseType.VOID);
+                    globalDestructorNodes.add(functionCall);
+                }
             }
         }
         return globalVarNodes;
@@ -607,6 +633,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private LLVMNode[] deallocations;
 
     private List<LLVMNode> globalNodes;
+    private List<LLVMNode> globalDestructorNodes;
 
     private BasicBlock currentBasicBlock;
 
