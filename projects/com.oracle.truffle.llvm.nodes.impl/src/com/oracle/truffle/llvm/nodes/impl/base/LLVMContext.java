@@ -40,6 +40,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallAtExitNode;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
@@ -49,6 +50,7 @@ public class LLVMContext extends ExecutionContext {
 
     private final List<RootCallTarget> staticInitializers = new ArrayList<>();
     private final List<RootCallTarget> staticDestructors = new ArrayList<>();
+    private final List<LLVMCallAtExitNode> executeAtExit = new ArrayList<>();
 
     private final LLVMFunctionRegistry registry;
 
@@ -132,12 +134,20 @@ public class LLVMContext extends ExecutionContext {
         staticInitializers.add(staticInitializer);
     }
 
+    public void registerAtExitNode(LLVMCallAtExitNode node) {
+        executeAtExit.add(node);
+    }
+
     public List<RootCallTarget> getStaticDestructors() {
         return staticDestructors;
     }
 
     public List<RootCallTarget> getStaticInitializers() {
         return staticInitializers;
+    }
+
+    public List<LLVMCallAtExitNode> getCallAtExitNodes() {
+        return executeAtExit;
     }
 
     public void setParseOnly(boolean parseOnly) {

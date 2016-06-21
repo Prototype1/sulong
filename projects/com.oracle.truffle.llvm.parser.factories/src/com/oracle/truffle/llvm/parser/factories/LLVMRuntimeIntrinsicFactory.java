@@ -37,6 +37,7 @@ import com.oracle.graal.replacements.amd64.AMD64MathSubstitutions;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMAbortFactory;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMAtExitFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMSqrtFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMExitFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleReadBytesFactory;
@@ -111,6 +112,7 @@ public class LLVMRuntimeIntrinsicFactory {
         // C
         intrinsics.put("@abort", LLVMAbortFactory.getInstance());
         intrinsics.put("@exit", LLVMExitFactory.getInstance());
+        intrinsics.put("@atexit", LLVMAtExitFactory.getInstance());
 
         if (optConfig.intrinsifyCLibraryFunctions()) {
             intrinsifyCFunctions(intrinsics);

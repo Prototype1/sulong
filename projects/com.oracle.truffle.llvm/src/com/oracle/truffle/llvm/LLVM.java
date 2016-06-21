@@ -56,6 +56,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallAtExitNode;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeVisitor;
 import com.oracle.truffle.llvm.parser.factories.NodeFactoryFacadeImpl;
@@ -169,6 +170,9 @@ public class LLVM {
                 // the PolyglotEngine calls this method for every mime type supported by the
                 // language
                 if (!context.getStack().isFreed()) {
+                    for (LLVMCallAtExitNode node : context.getCallAtExitNodes()) {
+                        node.call();
+                    }
                     for (RootCallTarget destructor : context.getStaticDestructors()) {
                         destructor.call();
                     }
